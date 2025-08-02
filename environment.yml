@@ -1,0 +1,20 @@
+name: CorCasRepos
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - matplotlib
+  - scipy
+  - pip
+  - requests
+  - beautifulsoup4
+  - selenium
+  - lxml
+  - pip:
+      - requests
+      - tqdm
+      - pyautogui
+      - schedule
+      - webdriver-manager
