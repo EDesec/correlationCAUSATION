@@ -18,3 +18,4 @@ dependencies:
       - pyautogui
       - schedule
       - webdriver-manager
+      - torch
