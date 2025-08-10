@@ -6,17 +6,17 @@ from pathlib import Path
 from typing import Any, Dict, List
 import pandas as pd
 import pytest
-import pipelines
+import src.pipelines
 
 # --- Imports from your modules ---
-from pipelines.fetch_prices import (
+from src.pipelines.fetch_prices import (
     normalize_download,
     merge_incremental as merge_incremental_prices,
     save_ticker_parquet,
     FetchConfig as PriceConfig,
     fetch_one as fetch_one_price,
 )
-from pipelines.fetch_news import (
+from src.pipelines.fetch_news import (
     normalize_rows,
     merge_incremental as merge_incremental_news,
     save_parquet as save_news_parquet,
@@ -121,7 +121,7 @@ def test_prices_merge_incremental_dedup(tmp_path: Path):
 
 def test_fetch_one_price_monkeypatched(monkeypatch, tmp_path: Path):
     """Mock yfinance.download to avoid network and ensure fetch_one returns normalized data."""
-    import pipelines.fetch_prices as fp
+    import src.pipelines.fetch_prices as fp
 
     def fake_download(ticker, period, interval, progress, auto_adjust, group_by, threads):
         return sample_price_df()
@@ -177,7 +177,7 @@ def test_news_merge_incremental_dedup(tmp_path: Path):
 
 def test_fetch_guardian_monkeypatched(monkeypatch, tmp_path: Path):
     """Mock fetch_page to test pagination without hitting the real API."""
-    import pipelines.fetch_news as fn
+    import src.pipelines.fetch_news as fn
 
     # two pages: second page returns empty to simulate end-of-results
     page_payloads = {

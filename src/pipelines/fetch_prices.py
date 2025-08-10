@@ -65,54 +65,61 @@ def flatten_columns(df: pd.DataFrame) -> List[str]:
 
 def normalize_download(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     """
-    Normalize yfinance output to a consistent schema:
-      date (datetime.date), open, high, low, close, adj_close, volume, ticker
+    Normalize yfinance output to:
+      date (datetime64[ns], UTC-naive midnight), open, high, low, close, adj_close, volume, ticker
+    Only keep rows with a valid date AND numeric adj_close.
     """
+    target_cols = ["date", "open", "high", "low", "close", "adj_close", "volume", "ticker"]
+
     if df is None or df.empty:
-        return pd.DataFrame(columns=["date", "open", "high", "low", "close", "adj_close", "volume", "ticker"])
+        return pd.DataFrame(columns=target_cols)
 
     df = df.reset_index()
-
-    # Flatten & lowercase columns to guard against MultiIndex and casing differences
     df.columns = flatten_columns(df)
 
-    # Map common variants to our target names
     rename_map = {
         "adj close": "adj_close",
         "adjclose": "adj_close",
-        "datetime": "date",  # some intraday intervals may use Datetime
+        "datetime": "date",
+        "index": "date",   # just in case
     }
     df = df.rename(columns=rename_map)
 
-    # Ensure we have required columns; create adj_close if missing
-    if "adj_close" not in df.columns:
-        if "close" in df.columns:
-            df["adj_close"] = df["close"]
-        else:
-            df["adj_close"] = pd.NA
-
-    # Normalize date column
+    # Ensure a date column
     if "date" not in df.columns:
-        if "index" in df.columns:
-            df["date"] = df["index"]
-        else:
-            # As a last resort, bail with empty; caller will handle
-            logging.warning("No 'date' column present after normalization.")
-            return pd.DataFrame(columns=["date", "open", "high", "low", "close", "adj_close", "volume", "ticker"])
+        logging.warning("No 'date' column present after normalization.")
+        return pd.DataFrame(columns=target_cols)
 
-    # yfinance daily typically returns Timestamp; store just the calendar date to simplify joins
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    # Parse date as pandas Timestamp (keep full datetime), then normalize to midnight and make naive
+    dt = pd.to_datetime(df["date"], errors="coerce", utc=True)
+    dt = dt.dt.tz_convert("UTC").dt.tz_localize(None).dt.normalize()
+    df["date"] = dt
 
-    # Keep only the columns we care about (create if absent)
-    for col in ["open", "high", "low", "close", "volume"]:
+    # Ensure expected price/volume columns exist
+    for col in ["open", "high", "low", "close", "adj_close", "volume"]:
         if col not in df.columns:
             df[col] = pd.NA
 
+    # Coerce numeric columns
+    for col in ["open", "high", "low", "close", "adj_close", "volume"]:
+        df[col] = (
+            df[col]
+            .replace({"None": None, "none": None, "null": None, "": None})
+            .astype(str).str.replace(",", "", regex=False)
+        )
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
     df["ticker"] = ticker
 
-    cols = ["date", "open", "high", "low", "close", "adj_close", "volume", "ticker"]
-    df = df[cols].dropna(subset=["date"]).sort_values(["ticker", "date"]).reset_index(drop=True)
+    # Keep only rows with valid date and adj_close (drop the junk!)
+    df = df.dropna(subset=["date", "adj_close"])
+
+    # Final ordering/sorting
+    df = df[["date", "open", "high", "low", "close", "adj_close", "volume", "ticker"]]
+    df = df.sort_values(["ticker", "date"]).reset_index(drop=True)
+
     return df
+
 
 
 def merge_incremental(path: Path, df_new: pd.DataFrame) -> pd.DataFrame:
@@ -187,17 +194,24 @@ def fetch_one(cfg: FetchConfig, ticker: str) -> pd.DataFrame:
 def save_ticker_parquet(out_dir: Path, df: pd.DataFrame) -> Path:
     """
     Write/merge a single ticker's DataFrame to Parquet (one file per ticker).
+    Requires at least one non-null adj_close row.
     """
-    if df.empty:
-        raise ValueError("Refusing to write empty DataFrame.")
+    if df.empty or df["adj_close"].notna().sum() == 0:
+        raise ValueError("Refusing to write: no usable rows (adj_close all null).")
 
     ticker = str(df["ticker"].iloc[0])
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"prices_{sanitize_filename(ticker)}.parquet"
 
     merged = merge_incremental(path, df)
+    # Drop any accidental nulls in the merged result too
+    merged = merged.dropna(subset=["date", "adj_close"]).sort_values(["ticker", "date"]).reset_index(drop=True)
+    if merged.empty:
+        raise ValueError("Refusing to write: merged result is empty after dropping nulls.")
+
     merged.to_parquet(path, index=False)
     return path
+
 
 
 # -----------------------

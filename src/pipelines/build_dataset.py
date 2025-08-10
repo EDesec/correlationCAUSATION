@@ -27,6 +27,9 @@ from typing import Iterable, List, Optional
 import numpy as np
 import pandas as pd
 
+import sys
+sys.path.append("/Users/eamondwight/Documents/correlationCAUSATION/src")
+
 from nlp.weak_labels import weak_label
 
 
@@ -153,7 +156,7 @@ def _align_prices_at_horizons(
     prices: pd.DataFrame,
     event_ts: np.ndarray,
     horizons: Iterable[int]
-) -> dict[int, np.ndarray]:
+    ) -> dict[int, np.ndarray]:
     """
     For each horizon h, return price at index_of(t0) + h where t0 is the last price
     at/preceding event_ts. Missing/insufficient lookahead yields NaN.
