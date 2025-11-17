@@ -1,5 +1,5 @@
 # correlationCAUSATION
-Goal: Build an end-to-end system to identify causal vs. correlational relationships in real-world news and economic indicator data. Maybe use it for other 
+Goal: Build an end-to-end system to identify causal vs. correlational relationships in real-world news and economic indicator data. Maybe use it for other purposes
 
 ## 📌 Project Status
 **Current Stage:** *(e.g., Planning / Early Development / MVP / Production)*  
